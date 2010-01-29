@@ -6,7 +6,11 @@ import struct
 from erlastic.constants import *
 from erlastic.types import *
 
-__all__ = ["ErlangTermEncoder", "ErlangTermDecoder", "EncodingError"]
+__all__ = ['ErlangTermEncoder', 'ErlangTermDecoder',
+           'EncodingError', 'DecodingError']
+
+class DecodingError(Exception):
+    pass
 
 class EncodingError(Exception):
     pass
@@ -24,7 +28,7 @@ class ErlangTermDecoder(object):
     def decode(self, bytes, offset=0):
         version = ord(bytes[offset])
         if version != FORMAT_VERSION:
-            raise EncodingError("Bad version number. Expected %d found %d" % (FORMAT_VERSION, version))
+            raise DecodingError("Bad version number. Expected %d found %d" % (FORMAT_VERSION, version))
         return self.decode_part(bytes, offset+1)[0]
 
     def decode_part(self, bytes, offset=0):
@@ -145,7 +149,7 @@ class ErlangTermDecoder(object):
         """REFERENCE_EXT"""
         node, offset = self.decode_part(bytes, offset)
         if not isinstance(node, Atom):
-            raise EncodingError("Expected atom while parsing REFERENCE_EXT, found %r instead" % node)
+            raise DecodingError("Expected atom while parsing REFERENCE_EXT, found %r instead" % node)
         reference_id, creation = struct.unpack(">LB", bytes[offset:offset+5])
         return Reference(node, [reference_id], creation), offset+5
 
@@ -154,7 +158,7 @@ class ErlangTermDecoder(object):
         id_len = struct.unpack(">H", bytes[offset:offset+2])[0]
         node, offset = self.decode_part(bytes, offset+2)
         if not isinstance(node, Atom):
-            raise EncodingError("Expected atom while parsing NEW_REFERENCE_EXT, found %r instead" % node)
+            raise DecodingError("Expected atom while parsing NEW_REFERENCE_EXT, found %r instead" % node)
         creation = ord(bytes[offset])
         reference_id = struct.unpack(">%dL" % id_len, bytes[offset+1:offset+1+4*id_len])
         return Reference(node, reference_id, creation), offset+1+4*id_len
@@ -163,7 +167,7 @@ class ErlangTermDecoder(object):
         """PORT_EXT"""
         node, offset = self.decode_part(bytes, offset)
         if not isinstance(node, Atom):
-            raise EncodingError("Expected atom while parsing PORT_EXT, found %r instead" % node)
+            raise DecodingError("Expected atom while parsing PORT_EXT, found %r instead" % node)
         port_id, creation = struct.unpack(">LB", bytes[offset:offset+5])
         return Port(node, port_id, creation), offset+5
 
@@ -171,7 +175,7 @@ class ErlangTermDecoder(object):
         """PID_EXT"""
         node, offset = self.decode_part(bytes, offset)
         if not isinstance(node, Atom):
-            raise EncodingError("Expected atom while parsing PID_EXT, found %r instead" % node)
+            raise DecodingError("Expected atom while parsing PID_EXT, found %r instead" % node)
         pid_id, serial, creation = struct.unpack(">LLB", bytes[offset:offset+9])
         return PID(node, pid_id, serial, creation), offset+9
 
@@ -179,13 +183,13 @@ class ErlangTermDecoder(object):
         """EXPORT_EXT"""
         module, offset = self.decode_part(bytes, offset)
         if not isinstance(module, Atom):
-            raise EncodingError("Expected atom while parsing EXPORT_EXT, found %r instead" % module)
+            raise DecodingError("Expected atom while parsing EXPORT_EXT, found %r instead" % module)
         function, offset = self.decode_part(bytes, offset)
         if not isinstance(function, Atom):
-            raise EncodingError("Expected atom while parsing EXPORT_EXT, found %r instead" % function)
+            raise DecodingError("Expected atom while parsing EXPORT_EXT, found %r instead" % function)
         arity, offset = self.decode_part(bytes, offset)
         if not isinstance(arity, int):
-            raise EncodingError("Expected integer while parsing EXPORT_EXT, found %r instead" % arity)
+            raise DecodingError("Expected integer while parsing EXPORT_EXT, found %r instead" % arity)
         return Export(module, function, arity), offset+1
 
     def convert_atom(self, atom):
