@@ -1,0 +1,39 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+PYVERS := $(shell pyversions -r)
+
+build: build-stamp
+build-stamp:
+	for py in $(PYVERS); do \
+	  $$py setup.py build; \
+	done
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	dh_clean
+
+install:
+	dh_testdir
+	dh_testroot
+	dh_prep
+	for py in $(PYVERS); do \
+	  $$py setup.py install --prefix=/opt/rdio --root=$(CURDIR)/debian/python-erlastic; \
+	done
+
+binary: build install
+	dh_testdir
+	dh_testroot
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+.PHONY: build clean install binary
