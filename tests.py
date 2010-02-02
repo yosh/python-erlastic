@@ -47,6 +47,8 @@ erlang_term_binaries = [
 
 erlang_term_decode = [
     ([102, 111, 111], list, '\x83k\x00\x03foo'),
+    # small big that fits in an int
+    (1234567890, int, '\x83n\x04\x00\xd2\x02\x96I'),
 ]
 
 erlang_term_encode = [
