@@ -104,7 +104,7 @@ decode_bigint(DecoderState *state, unsigned int n)
 {
     unsigned int sign;
     const unsigned char *p;
-    PyObject *res, *neg_res;
+    PyObject *res, *neg_res, *possible_int;
 
     CHECK_SHORT_BUFFER(1 + n);
 
@@ -119,11 +119,18 @@ decode_bigint(DecoderState *state, unsigned int n)
 
     if (sign) {
         neg_res = PyNumber_Negative(res);
-        Py_DECREF(res);
-        return neg_res;
+        if (neg_res == NULL)
+            return NULL;
+
+        possible_int = PyNumber_Int(neg_res);
+        Py_DECREF(neg_res);
     }
-    else
-        return res;
+    else {
+        possible_int = PyNumber_Int(res);
+    }
+
+    Py_DECREF(res);
+    return possible_int;
 }
 
 
