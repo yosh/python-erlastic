@@ -1,9 +1,15 @@
+python-erlastic (0.1-rdio.3) karmic; urgency=low
+
+  * Version number bump only
+
+ -- Manish Singh <manish@rd.io>  Tue,  2 Feb 2010 16:39:06 -0800
+
 python-erlastic (0.1-rdio.2) karmic; urgency=low
 
   * Handle small big ints that fit into a python int the same way as the pure
     python codec
 
- -- Manish Singh <manish@rd.io>  Tue,  3 Feb 2010 15:42:42 -0800
+ -- Manish Singh <manish@rd.io>  Tue,  2 Feb 2010 15:42:42 -0800
 
 python-erlastic (0.1-rdio.1) karmic; urgency=low
 
