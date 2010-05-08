@@ -207,7 +207,7 @@ encode_int(EncoderState *state, PyObject *obj)
         int res;
 
         l = PyLong_FromLong(v);
-        if (l == NULL);
+        if (l == NULL)
             return -1;
 
         res = encode_long(state, l);
