@@ -1,3 +1,12 @@
+python-erlastic (1.0.0-rdio.1) karmic; urgency=low
+
+  * Fix long encoding fallback for ints exceeding 32-bits on 64-bit
+  platforms
+
+  * Upstream version is now 1.0
+
+ -- Manish Singh <manish@rd.io>  Tue,  7 May 2010 17:26:36 -0700
+
 python-erlastic (0.1-rdio.3) karmic; urgency=low
 
   * Version number bump only
