@@ -15,8 +15,5 @@ except ImportError:
     ErlangTermDecoder = PythonErlangTermDecoder
     ErlangTermEncoder = PythonErlangTermEncoder
 
-def encode(obj):
-    return ErlangTermEncoder().encode(obj)
-
-def decode(obj):
-    return ErlangTermDecoder().decode(obj)
+encode = ErlangTermEncoder().encode
+decode = ErlangTermDecoder().decode
