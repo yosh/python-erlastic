@@ -2,6 +2,7 @@
 from __future__ import division
 
 import struct
+import zlib
 
 from erlastic.constants import *
 from erlastic.types import *
@@ -192,6 +193,12 @@ class ErlangTermDecoder(object):
             raise DecodingError("Expected integer while parsing EXPORT_EXT, found %r instead" % arity)
         return Export(module, function, arity), offset+1
 
+    def decode_P(self, bytes, offset):
+        """Compressed term"""
+        usize = struct.unpack(">L", bytes[offset:offset+4])[0]
+        bytes = zlib.decompress(bytes[offset+4:offset+4+usize])
+        return self.decode_part(bytes, 0)
+
     def convert_atom(self, atom):
         if atom == "true":
             return True
@@ -206,8 +213,21 @@ class ErlangTermEncoder(object):
         self.encoding = encoding
         self.unicode_type = unicode_type
 
-    def encode(self, obj):
-        return chr(FORMAT_VERSION) + "".join(self.encode_part(obj))
+    def encode(self, obj, compressed=False):
+        ubytes = "".join(self.encode_part(obj))
+        if compressed is True:
+            compressed = 6
+        if not (compressed is False \
+                    or (isinstance(compressed, (int, long)) \
+                            and compressed >= 0 and compressed <= 9)):
+            raise TypeError("compressed must be True, False or "
+                            "an integer between 0 and 9")
+        if compressed:
+            cbytes = zlib.compress(ubytes, compressed)
+            if len(cbytes) < len(ubytes):
+                usize = struct.pack(">L", len(ubytes))
+                ubytes = "".join([COMPRESSED, usize, cbytes])
+        return chr(FORMAT_VERSION) + ubytes
 
     def encode_part(self, obj):
         if obj is False:
