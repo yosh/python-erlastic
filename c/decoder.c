@@ -63,6 +63,25 @@ read_uint4(DecoderState *state)
 #endif
 
 static PyObject *
+get_decompress_func(void)
+{
+    static PyObject *decompress = NULL;
+
+    if (decompress == NULL) {
+        PyObject *zlib;
+
+        zlib = PyImport_ImportModule("zlib");
+        if (zlib != NULL) {
+            decompress = PyObject_GetAttrString(zlib, "decompress");
+            Py_DECREF(zlib);
+        }
+        else
+            PyErr_Clear();
+    }
+    return decompress;
+}
+
+static PyObject *
 new_atom(const char *atom_name)
 {
     PyObject *s, *args, *res;
@@ -641,6 +660,54 @@ decode_embedded_atom(DecoderState *state, const char *parent_tag_name)
 }
 
 static PyObject *
+decode_compressed(DecoderState *state)
+{
+    PyObject *decompress, *compressed_data, *data, *res;
+    unsigned int expected_len;
+    Py_ssize_t len;
+    DecoderState uncompressed_state;
+
+    decompress = get_decompress_func();
+    if (decompress == NULL) {
+        PyErr_SetString(decoding_error,
+                        "can't decompress data; zlib not available");
+        return NULL;
+    }
+
+    CHECK_SHORT_BUFFER(5);
+    expected_len = read_uint4(state);
+
+    compressed_data = PyString_FromStringAndSize(BYTES_AS_CSTRING,
+                                                 state->len - state->offset);
+    if (compressed_data == NULL)
+        return NULL;
+
+    data = PyObject_CallFunctionObjArgs(decompress, compressed_data, NULL);
+    Py_DECREF(compressed_data);
+    if (data == NULL)
+        return NULL;
+
+    len = PyString_Size(data);
+    if (len != expected_len) {
+        PyErr_SetString(decoding_error,
+                        "uncompressed data length does not match "
+                        "expected length");
+        Py_DECREF(data);
+        return NULL;
+    }
+
+    uncompressed_state.encoding = state->encoding;
+    uncompressed_state.bytes = (const unsigned char *) PyString_AS_STRING(data);
+    uncompressed_state.len = len;
+    uncompressed_state.offset = 0;
+
+    res = decode_term(&uncompressed_state);
+
+    Py_DECREF(data);
+    return res;
+}
+
+static PyObject *
 decode_term(DecoderState *state)
 {
     unsigned char tag;
@@ -720,17 +787,16 @@ decode(DecoderObject *self, PyObject *args, PyObject *kwargs)
                                      &state.bytes, &state.len, &state.offset))
         return NULL;
 
-    if (state.offset >= state.len)
-        return PyErr_Format(decoding_error,
-                            "Erlang term data was truncated");
-
-    version = state.bytes[state.offset];
-    if (version != FORMAT_VERSION) {
-        PyErr_Format(decoding_error,
-                     "Bad version number. Expected %d found %d",
-                     FORMAT_VERSION, version);
+    if (state.offset + 1 >= state.len) {
+        PyErr_SetString(decoding_error, "Erlang term data was truncated");
         return NULL;
     }
+
+    version = state.bytes[state.offset];
+    if (version != FORMAT_VERSION)
+        return PyErr_Format(decoding_error,
+                            "Bad version number. Expected %d found %d",
+                            FORMAT_VERSION, version);
 
     if (self->encoding != Py_None) {
         if (!PyString_Check(self->encoding) && !PyUnicode_Check(self->encoding))
@@ -751,7 +817,13 @@ decode(DecoderObject *self, PyObject *args, PyObject *kwargs)
     }
 
     state.offset++;
-    res = decode_term(&state);
+
+    if (state.bytes[state.offset] == COMPRESSED) {
+        state.offset++;
+        res = decode_compressed(&state);
+    }
+    else
+        res = decode_term(&state);
 
     PyMem_Free(state.encoding);
     return res;

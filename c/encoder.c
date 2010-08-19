@@ -19,11 +19,31 @@ typedef struct _EncoderObject {
 typedef struct _EncoderState {
     char *encoding;
     UnicodeType unicode_type;
+    int compressed;
     PyObject *parts;
     Py_ssize_t len;
 } EncoderState;
 
 static int encode_obj(EncoderState *state, PyObject *obj);
+
+static PyObject *
+get_compress_func(void)
+{
+    static PyObject *compress = NULL;
+
+    if (compress == NULL) {
+        PyObject *zlib;
+
+        zlib = PyImport_ImportModule("zlib");
+        if (zlib != NULL) {
+            compress = PyObject_GetAttrString(zlib, "compress");
+            Py_DECREF(zlib);
+        }
+        else
+            PyErr_Clear();
+    }
+    return compress;
+}
 
 static int
 append_part(EncoderState *state, PyObject *part)
@@ -704,45 +724,148 @@ encode_obj(EncoderState *state, PyObject *obj)
     return -1;
 }
 
-static PyObject *
-build_result(EncoderState *state)
+static void
+concat_parts(PyObject *parts, char *p)
 {
-    PyObject *res;
-    char *p;
     Py_ssize_t parts_len, i;
 
-    res = PyString_FromStringAndSize(NULL, state->len + 1);
-    if (res == NULL) {
-        Py_DECREF(state->parts);
-        return NULL;
-    }
-
-    p = PyString_AS_STRING(res);
-    *p++ = FORMAT_VERSION;
-
-    parts_len = PyList_GET_SIZE(state->parts);
+    parts_len = PyList_GET_SIZE(parts);
 
     for (i = 0; i < parts_len; i++) {
         PyObject *part;
         Py_ssize_t n;
 
-        part = PyList_GET_ITEM(state->parts, i);
+        part = PyList_GET_ITEM(parts, i);
         n = PyString_GET_SIZE(part);
 
         Py_MEMCPY(p, PyString_AS_STRING(part), n);
         p += n;
     }
 
-    Py_DECREF(state->parts);
+    Py_DECREF(parts);
+}
+
+static PyObject *
+build_result(EncoderState *state)
+{
+    PyObject *res;
+    char *p;
+
+    if (state->compressed > 0) {
+       PyObject *compress, *data, *compressed_data;
+       Py_ssize_t compressed_len;
+
+       compress = get_compress_func();
+       if (compress == NULL) {
+           PyErr_SetString(encoding_error,
+                           "can't compress data; zlib not available");
+           Py_DECREF(state->parts);
+           return NULL;
+       }
+
+       data = PyString_FromStringAndSize(NULL, state->len);
+       p = PyString_AS_STRING(data);
+       concat_parts(state->parts, p);
+
+       compressed_data = PyObject_CallFunction(compress, "Oi",
+                                               data, state->compressed);
+       if (compressed_data == NULL) {
+           Py_DECREF(data);
+           return NULL;
+       }
+
+       compressed_len = PyString_Size(compressed_data);
+       if (compressed_len < state->len) {
+           Py_DECREF(data);
+
+           res = PyString_FromStringAndSize(NULL, compressed_len + 6);
+           if (res == NULL) {
+               Py_DECREF(compressed_data);
+               return NULL;
+           }
+
+           p = PyString_AS_STRING(res);
+           *p++ = FORMAT_VERSION;
+	   *p++ = COMPRESSED;
+           *p++ = (char) (state->len >> 24);
+           *p++ = (char) (state->len >> 16);
+           *p++ = (char) (state->len >> 8);
+           *p++ = (char) state->len;
+
+           Py_MEMCPY(p, PyString_AS_STRING(compressed_data), compressed_len);
+	   Py_DECREF(compressed_data);
+       }
+       else {
+	   Py_DECREF(compressed_data);
+
+           res = PyString_FromStringAndSize(NULL, state->len + 1);
+           if (res == NULL) {
+               Py_DECREF(data);
+               return NULL;
+           }
+
+           p = PyString_AS_STRING(res);
+           *p++ = FORMAT_VERSION;
+
+           Py_MEMCPY(p, PyString_AS_STRING(data), state->len);
+	   Py_DECREF(data);
+       }
+    }
+    else {
+        res = PyString_FromStringAndSize(NULL, state->len + 1);
+        if (res == NULL) {
+            Py_DECREF(state->parts);
+            return NULL;
+        }
+
+        p = PyString_AS_STRING(res);
+        *p++ = FORMAT_VERSION;
+        concat_parts(state->parts, p);
+    }
 
     return res;
 }
 
 static PyObject *
-encode(EncoderObject *self, PyObject *obj)
+encode(EncoderObject *self, PyObject *args, PyObject *kwargs)
 {
     EncoderState state = { 0, };
+    PyObject *obj, *compressed = NULL;
     char *unicode_type;
+
+    static char *kwlist[] = { "data", "compressed", NULL };
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+                                     "O|O:encode", kwlist,
+                                     &obj, &compressed))
+        return NULL;
+
+    if (compressed == NULL || compressed == Py_False)
+        state.compressed = 0;
+    else if (compressed == Py_True)
+        state.compressed = 6;
+    else if (PyInt_Check(compressed) || PyLong_Check(compressed)) {
+        long v;
+
+        v = PyInt_AsLong(compressed);
+        if ((v == -1) && PyErr_Occurred())
+            return NULL;
+
+        if (v < 0 || v > 9) {
+            PyErr_SetString(PyExc_TypeError,
+                            "compressed must be True, False or "
+                            "an integer between 0 and 9");
+            return NULL;
+        }
+        else
+            state.compressed = v;
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError,
+                        "compressed must be True, False or "
+                        "an integer between 0 and 9");
+        return NULL;
+    }
 
     if (!PyString_Check(self->unicode_type) && !PyUnicode_Check(self->unicode_type))
         return PyErr_Format(PyExc_TypeError,
@@ -806,7 +929,7 @@ encode(EncoderObject *self, PyObject *obj)
 }
 
 static struct PyMethodDef encoder_methods[] = {
-    { "encode", (PyCFunction)encode, METH_O,
+    { "encode", (PyCFunction)encode, METH_VARARGS | METH_KEYWORDS,
       PyDoc_STR("encode(string) -- encode an Erlang term")
     },
     {NULL, NULL}
