@@ -786,17 +786,17 @@ build_result(EncoderState *state)
 
            p = PyString_AS_STRING(res);
            *p++ = FORMAT_VERSION;
-	   *p++ = COMPRESSED;
+           *p++ = COMPRESSED;
            *p++ = (char) (state->len >> 24);
            *p++ = (char) (state->len >> 16);
            *p++ = (char) (state->len >> 8);
            *p++ = (char) state->len;
 
            Py_MEMCPY(p, PyString_AS_STRING(compressed_data), compressed_len);
-	   Py_DECREF(compressed_data);
+           Py_DECREF(compressed_data);
        }
        else {
-	   Py_DECREF(compressed_data);
+           Py_DECREF(compressed_data);
 
            res = PyString_FromStringAndSize(NULL, state->len + 1);
            if (res == NULL) {
@@ -808,7 +808,7 @@ build_result(EncoderState *state)
            *p++ = FORMAT_VERSION;
 
            Py_MEMCPY(p, PyString_AS_STRING(data), state->len);
-	   Py_DECREF(data);
+           Py_DECREF(data);
        }
     }
     else {
