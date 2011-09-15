@@ -6,6 +6,8 @@ class Atom(str):
         return "Atom(%s)" % super(Atom, self).__repr__()
 
 class Reference(object):
+    __slots__ = ['node', 'ref_id', 'creation']
+
     def __init__(self, node, ref_id, creation):
         if not isinstance(ref_id, tuple):
             ref_id = tuple(ref_id)
@@ -27,6 +29,8 @@ class Reference(object):
         return "%s::%s" % (self.__str__(), self.node)
 
 class Port(object):
+    __slots__ = ['node', 'port_id', 'creation']
+
     def __init__(self, node, port_id, creation):
         self.node = node
         self.port_id = port_id
@@ -46,6 +50,8 @@ class Port(object):
         return "%s::%s" % (self.__str__(), self.node)
 
 class PID(object):
+    __slots__ = ['node', 'pid_id', 'serial', 'creation']
+
     def __init__(self, node, pid_id, serial, creation):
         self.node = node
         self.pid_id = pid_id
@@ -66,6 +72,8 @@ class PID(object):
         return "%s::%s" % (self.__str__(), self.node)
 
 class Export(object):
+    __slots__ = ['module', 'function', 'arity']
+
     def __init__(self, module, function, arity):
         self.module = module
         self.function = function
