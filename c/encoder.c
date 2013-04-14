@@ -108,7 +108,7 @@ append_empty_list(EncoderState *state)
 static int
 encode_none(EncoderState *state)
 {
-    static unsigned char buf[] = { ATOM_EXT, 0, 4, 'n', 'o', 'n', 'e' };
+    static unsigned char buf[] = { ATOM_EXT, 0, 9, 'u', 'n', 'd', 'e', 'f', 'i', 'n', 'e', 'd' };
     return append_buffer(state, buf, sizeof(buf));
 }
 

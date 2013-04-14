@@ -204,7 +204,7 @@ class ErlangTermDecoder(object):
             return True
         elif atom == "false":
             return False
-        elif atom == "none":
+        elif atom == "undefined":
             return None
         return Atom(atom)
 
@@ -235,7 +235,7 @@ class ErlangTermEncoder(object):
         elif obj is True:
             return [ATOM_EXT, struct.pack(">H", 4), "true"]
         elif obj is None:
-            return [ATOM_EXT, struct.pack(">H", 4), "none"]
+            return [ATOM_EXT, struct.pack(">H", 9), "undefined"]
         elif isinstance(obj, (int, long)):
             if 0 <= obj <= 255:
                 return [SMALL_INTEGER_EXT, chr(obj)]
