@@ -206,6 +206,8 @@ class ErlangTermDecoder(object):
             return False
         elif atom == "undefined":
             return None
+        elif atom == "none":
+            return None
         return Atom(atom)
 
 class ErlangTermEncoder(object):

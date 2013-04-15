@@ -110,6 +110,8 @@ convert_string_to_atom(PyObject *o)
 
     if (strcmp(s, "undefined") == 0)
         Py_RETURN_NONE;
+    else if (strcmp(s, "none") == 0)
+        Py_RETURN_NONE;
     else if (strcmp(s, "true") == 0)
         Py_RETURN_TRUE;
     else if (strcmp(s, "false") == 0)
