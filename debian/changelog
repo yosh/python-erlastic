@@ -1,4 +1,4 @@
-python-erlastic (1.0.1-rdio.1) precise; urgency=low
+python-erlastic (1.0.1-rdio2) precise; urgency=low
 
   * None roundtrips as undefined now. Atom('none') also decodes as undefined.
 
