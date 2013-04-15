@@ -1,7 +1,7 @@
 
 """Erlang External Term Format serializer/deserializer"""
 
-__version__ = "1.0.0"
+__version__ = "1.0.0-rdio"
 __license__ = "BSD"
 
 from erlastic.types import *
