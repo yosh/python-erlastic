@@ -1,14 +1,13 @@
 Source: python-erlastic
-Section: devel
-Priority: extra
-Build-Depends: debhelper (>= 5), build-essential, python-all-dev
+Section: python
+Priority: optional
+Build-Depends: debhelper (>= 8.0.0), python-all-dev, python-support
 Maintainer: Manish Singh <manish@rd.io>
-Standards-Version: 3.9.2
-XS-Python-Version: all
+Standards-Version: 3.9.3
+X-Python-Version: all
 
 Package: python-erlastic
 Architecture: any
-Section: python
-Depends: ${shlibs:Depends}, ${python:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}
 Description: Python implementation of Erlang binary term codec
-  This module lets you deal with Erlang binary terms in Python.
+ This module lets you deal with Erlang binary terms in Python.
