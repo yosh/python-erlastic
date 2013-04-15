@@ -1,3 +1,9 @@
+python-erlastic (1.0.1-rdio.1) precise; urgency=low
+
+  * None roundtrips as undefined now. Atom('none') also decodes as undefined.
+
+ -- Manish Singh <manish@rd.io>  Sun, 14 Apr 2013 18:58:38 -0700
+
 python-erlastic (1.0.0-rdio.2) karmic; urgency=low
 
   * Support for compressed terms.
