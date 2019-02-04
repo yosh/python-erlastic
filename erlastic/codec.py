@@ -227,13 +227,8 @@ class ErlangTermEncoder(object):
         elif obj is True:
             return [bytes([ATOM_EXT]), struct.pack(">H", 4), b"true"]
         elif obj is None:
-<<<<<<< HEAD
-            return [ATOM_EXT, struct.pack(">H", 9), "undefined"]
-        elif isinstance(obj, (int, long)):
-=======
             return [bytes([ATOM_EXT]), struct.pack(">H", 4), b"none"]
         elif isinstance(obj, int):
->>>>>>> samuel/master
             if 0 <= obj <= 255:
                 return [bytes([SMALL_INTEGER_EXT,obj])]
             elif -2147483648 <= obj <= 2147483647:
