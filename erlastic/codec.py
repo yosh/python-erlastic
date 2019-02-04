@@ -9,9 +9,6 @@ from erlastic.types import *
 
 __all__ = ["ErlangTermEncoder", "ErlangTermDecoder", "EncodingError"]
 
-class EncodingError(Exception):
-    pass
-
 class ErlangTermDecoder(object):
     def __init__(self):
         # Cache decode functions to avoid having to do a getattr
@@ -49,15 +46,19 @@ class ErlangTermDecoder(object):
 
     def decode_100(self, buf, offset):
         """ATOM_EXT"""
-        atom_len = struct.unpack(">H", buf[offset:offset+2])[0]
-        atom = buf[offset+2:offset+2+atom_len]
-        return self.convert_atom(atom), offset+atom_len+2
+        return self.decode_atom(buf, offset, 'latin-1')
 
     def decode_115(self, buf, offset):
         """SMALL_ATOM_EXT"""
-        atom_len = buf[offset]
-        atom = buf[offset+1:offset+1+atom_len]
-        return self.convert_atom(atom), offset+atom_len+1
+        return self.decode_small_atom(buf, offset, 'latin-1')
+
+    def decode_118(self, buf, offset):
+        """ATOM_UTF8_EXT"""
+        return self.decode_atom(buf, offset, 'utf-8')
+
+    def decode_119(self, buf, offset):
+        """SMALL_ATOM_UTF8_EXT"""
+        return self.decode_small_atom(buf, offset, 'utf-8')
 
     def decode_104(self, buf, offset):
         """SMALL_TUPLE_EXT"""
@@ -80,6 +81,19 @@ class ErlangTermDecoder(object):
             val, offset = self.decode_part(buf, offset)
             items.append(val)
         return tuple(items), offset
+
+    def decode_116(self, buf, offset):
+        """MAP_EXT"""
+        arity = struct.unpack(">L", buf[offset:offset+4])[0]
+        offset += 4
+
+        d = {}
+        for i in range(arity):
+            k, offset = self.decode_part(buf, offset)
+            v, offset = self.decode_part(buf, offset)
+            d[k] = v
+
+        return d, offset
 
     def decode_106(self, buf, offset):
         """NIL_EXT"""
@@ -185,27 +199,30 @@ class ErlangTermDecoder(object):
     def decode_80(self, buf, offset):
         """Compressed term"""
         usize = struct.unpack(">L", buf[offset:offset+4])[0]
-        buf = zlib.decompress(buf[offset+4:offset+4+usize])
+        buf = zlib.decompress(buf[offset+4:])
         return self.decode_part(buf, 0)
 
-    def convert_atom(self, atom):
+    def decode_atom(self, buf, offset, encoding):
+        atom_len = struct.unpack(">H", buf[offset:offset+2])[0]
+        atom = buf[offset+2:offset+2+atom_len]
+        return self.convert_atom(atom, encoding), offset+atom_len+2
+
+    def decode_small_atom(self, buf, offset, encoding):
+        atom_len = buf[offset]
+        atom = buf[offset+1:offset+1+atom_len]
+        return self.convert_atom(atom, encoding), offset+atom_len+1
+
+    def convert_atom(self, atom, encoding):
         if atom == b"true":
             return True
         elif atom == b"false":
             return False
         elif atom == b"none":
             return None
-        return Atom(atom.decode('latin-1'))
+        return Atom(atom.decode(encoding))
 
 class ErlangTermEncoder(object):
-    def __init__(self, encoding="utf-8", unicode_type="binary"):
-        self.encoding = encoding
-        self.unicode_type = unicode_type
-
     def encode(self, obj, compressed=False):
-        import sys
-        import pprint
-        #pprint.pprint(self.encode_part(obj),stream=sys.stderr)
         ubuf = b"".join(self.encode_part(obj))
         if compressed is True:
             compressed = 6
@@ -223,11 +240,11 @@ class ErlangTermEncoder(object):
 
     def encode_part(self, obj):
         if obj is False:
-            return [bytes([ATOM_EXT]), struct.pack(">H", 5), b"false"]
+            return [bytes([SMALL_ATOM_UTF8_EXT, 5]), b"false"]
         elif obj is True:
-            return [bytes([ATOM_EXT]), struct.pack(">H", 4), b"true"]
+            return [bytes([SMALL_ATOM_UTF8_EXT, 4]), b"true"]
         elif obj is None:
-            return [bytes([ATOM_EXT]), struct.pack(">H", 4), b"none"]
+            return [bytes([SMALL_ATOM_UTF8_EXT, 4]), b"none"]
         elif isinstance(obj, int):
             if 0 <= obj <= 255:
                 return [bytes([SMALL_INTEGER_EXT,obj])]
@@ -247,11 +264,9 @@ class ErlangTermEncoder(object):
                 else:
                     return [bytes([LARGE_BIG_EXT]), struct.pack(">L", len(big_buf)), bytes([sign]), bytes(big_buf)]
         elif isinstance(obj, float):
-            floatstr = ("%.20e" % obj).encode('ascii')
-            return [bytes([FLOAT_EXT]), floatstr + b"\x00"*(31-len(floatstr))]
+            return [bytes([NEW_FLOAT_EXT]), struct.pack(">d", obj)]
         elif isinstance(obj, Atom):
-            st = obj.encode('latin-1')
-            return [bytes([ATOM_EXT]), struct.pack(">H", len(st)), st]
+            return self.encode_atom(obj)
         elif isinstance(obj, str):
             st = obj.encode('utf-8')
             return [bytes([BINARY_EXT]), struct.pack(">L", len(st)), st]
@@ -266,6 +281,13 @@ class ErlangTermEncoder(object):
             for item in obj:
                 buf += self.encode_part(item)
             return buf
+        elif isinstance(obj, dict):
+            n = len(obj)
+            buf = [bytes([MAP_EXT]), struct.pack(">L", n)]
+            for k, v in obj.items():
+                buf += self.encode_part(k)
+                buf += self.encode_part(v)
+            return buf
         elif obj == []:
             return [bytes([NIL_EXT])]
         elif isinstance(obj, list):
@@ -275,22 +297,29 @@ class ErlangTermEncoder(object):
             buf.append(bytes([NIL_EXT])) # list tail - no such thing in Python
             return buf
         elif isinstance(obj, Reference):
-            return [bytes([NEW_REFERENCE_EXT]),
-                struct.pack(">H", len(obj.ref_id)),
-                bytes([ATOM_EXT]), struct.pack(">H", len(obj.node)), obj.node.encode('latin-1'),
-                bytes([obj.creation]), struct.pack(">%dL" % len(obj.ref_id), *obj.ref_id)]
+            return ([bytes([NEW_REFERENCE_EXT]), struct.pack(">H", len(obj.ref_id))]
+                + self.encode_atom(obj.node)
+                + [bytes([obj.creation]), struct.pack(">%dL" % len(obj.ref_id), *obj.ref_id)])
         elif isinstance(obj, Port):
-            return [bytes([PORT_EXT]),
-                bytes([ATOM_EXT]), struct.pack(">H", len(obj.node)), obj.node.encode('latin-1'),
-                struct.pack(">LB", obj.port_id, obj.creation)]
+            return ([bytes([PORT_EXT])]
+                + self.encode_atom(obj.node)
+                + [struct.pack(">LB", obj.port_id, obj.creation)])
         elif isinstance(obj, PID):
-           return [bytes([PID_EXT]),
-                bytes([ATOM_EXT]), struct.pack(">H", len(obj.node)), obj.node.encode('latin-1'),
-                struct.pack(">LLB", obj.pid_id, obj.serial, obj.creation)]
+           return ([bytes([PID_EXT])]
+                + self.encode_atom(obj.node)
+                + [struct.pack(">LLB", obj.pid_id, obj.serial, obj.creation)])
         elif isinstance(obj, Export):
-            return [bytes([EXPORT_EXT]),
-                bytes([ATOM_EXT]), struct.pack(">H", len(obj.module)), obj.module.encode('latin-1'),
-                bytes([ATOM_EXT]), struct.pack(">H", len(obj.function)), obj.function.encode('latin-1'),
-                bytes([SMALL_INTEGER_EXT,obj.arity])]
+            return ([bytes([EXPORT_EXT])]
+                + self.encode_atom(obj.module)
+                + self.encode_atom(obj.function)
+                + [bytes([SMALL_INTEGER_EXT,obj.arity])])
         else:
             raise NotImplementedError("Unable to serialize %r" % obj)
+
+    def encode_atom(self, obj):
+        st = obj.encode('utf-8')
+        n = len(st)
+        if n < 256:
+            return [bytes([SMALL_ATOM_UTF8_EXT, n]), st]
+        else:
+            return [bytes([ATOM_UTF8_EXT]), struct.pack(">H", n), st]

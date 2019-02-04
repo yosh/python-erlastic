@@ -4,11 +4,14 @@
 __version__ = "2.0.0"
 __license__ = "BSD"
 
-from erlastic.codec import ErlangTermDecoder, ErlangTermEncoder
-from erlastic.types import *
+from .types import *
 
-encode = ErlangTermEncoder().encode
-decode = ErlangTermDecoder().decode
+try:
+    from ._erlastic import encode, decode
+except ImportError:
+    from .codec import ErlangTermDecoder, ErlangTermEncoder
+    encode = ErlangTermEncoder().encode
+    decode = ErlangTermDecoder().decode
 
 import struct
 import sys

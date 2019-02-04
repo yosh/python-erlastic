@@ -1,5 +1,5 @@
 
-__all__ = ['Atom', 'Reference', 'Port', 'PID', 'Export']
+__all__ = ['Atom', 'Reference', 'Port', 'PID', 'Export', 'EncodingError']
 
 class Atom(str):
     def __repr__(self):
@@ -83,3 +83,6 @@ class Export(object):
 
     def __repr__(self):
         return self.__str__()
+
+class EncodingError(Exception):
+    pass
